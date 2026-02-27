@@ -112,18 +112,12 @@ Restart Database:
 
 ------------------------------------------------------------------------
 
-# 6️⃣ ทดสอบ expdp
-
-    unset TWO_TASK
-    $ORACLE_HOME/bin/expdp "'/ as sysdba'" FULL=Y DIRECTORY=DATA_PUMP_DIR DUMPFILE=test.dmp LOGFILE=test.log
-
-------------------------------------------------------------------------
 
 # 7️⃣ สร้าง Backup Script
 
 ไฟล์:
 
-    /home/oracle/backup_all_db.sh
+    nano /home/oracle/backup_all_db.sh
 
 เนื้อหา:
 
