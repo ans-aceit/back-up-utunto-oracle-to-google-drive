@@ -20,6 +20,10 @@
     sudo apt update
     sudo apt upgrade -y
 
+	dnf update
+	dnf upgrade -y
+	
+
 ติดตั้ง package ที่จำเป็น:
 
     sudo apt install -y unzip wget curl net-tools vim
