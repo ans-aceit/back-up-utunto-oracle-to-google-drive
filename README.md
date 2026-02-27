@@ -123,40 +123,49 @@ Restart Database:
 
 เนื้อหา:
 
-    #!/bin/bash
+	#!/bin/bash
 
-    export ORACLE_BASE=/u01/app/oracle
-    export ORACLE_HOME=/u01/app/oracle/product/19.0.0/dbhome_1
-    export PATH=$ORACLE_HOME/bin:$PATH
+	# ===== Oracle Environment =====
+	export ORACLE_BASE=/u01/app/oracle
+	export ORACLE_HOME=/u01/app/oracle/product/19.0.0/dbhome_1
+	export PATH=$ORACLE_HOME/bin:$PATH
 
-    unset TWO_TASK
+	DATE=$(date +%Y%m%d)
 
-    DATE=$(date +%Y%m%d)
+	DB_LIST=(
+	cesdbads
+	cesdbbds
+	cesdbtsc
+	cesdbacc
+	)
 
-    DB_LIST=(
-    orcl
-    )
+	for DB in "${DB_LIST[@]}"
+	do
+		echo "===== Backup $DB ====="
 
-    for DB in "${DB_LIST[@]}"
-    do
-        echo "===== Backup $DB ====="
+		export ORACLE_SID=$DB
+		DUMP_DIR=/u01/app/oracle/admin/$DB/dpdump
 
-        export ORACLE_SID=$DB
-        DUMP_DIR=/u01/app/oracle/admin/$DB/dpdump
+			$ORACLE_HOME/bin/expdp \'sys/<Password> as sysdba\' \
+					FULL=Y \
+					DIRECTORY=DATA_PUMP_DIR \
+					DUMPFILE=${DB}_$DATE.dmp \
+					LOGFILE=${DB}_$DATE.log
 
-        $ORACLE_HOME/bin/expdp "'/ as sysdba'"             FULL=Y             DIRECTORY=DATA_PUMP_DIR             DUMPFILE=${DB}_$DATE.dmp             LOGFILE=${DB}_$DATE.log
+		# เช็คว่ามีไฟล์จริงก่อน upload
+		if [ -f "$DUMP_DIR/${DB}_$DATE.dmp" ]; then
+			rclone copy "$DUMP_DIR/${DB}_$DATE.dmp" gdrive:OracleBackup/$DB/
+		else
+			echo "Backup failed for $DB"
+		fi
 
-        if [ -f "$DUMP_DIR/${DB}_$DATE.dmp" ]; then
-            rclone copy "$DUMP_DIR/${DB}_$DATE.dmp" gdrive:OracleBackup/$DB/
-        else
-            echo "Backup failed for $DB"
-        fi
+		# ลบไฟล์เก่าเกิน 7 วัน
+		find "$DUMP_DIR" -name "*.dmp" -mtime +7 -delete
 
-        find "$DUMP_DIR" -name "*.dmp" -mtime +7 -delete
+	done
 
-    done
+	echo "===== Backup Completed ====="
 
-    echo "===== Backup Completed ====="
 
 ให้สิทธิ์:
 
