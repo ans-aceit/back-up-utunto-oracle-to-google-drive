@@ -3,7 +3,7 @@
 ## Overview
 
 คู่มือฉบับสมบูรณ์สำหรับ:
-
+1-3 หากมีแล้วไม่ต้องทำ
 1.  ติดตั้ง Ubuntu Server
 2.  ติดตั้ง Oracle Database 19c
 3.  ตั้งค่า OS Authentication
