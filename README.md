@@ -1,31 +1,70 @@
-# Oracle 19c Backup Script (expdp + cron + rclone)
+# Ubuntu + Oracle 19c + Google Drive Backup Guide (Complete)
 
 ## Overview
 
-Script สำหรับ Backup Oracle Database แบบ Full Export ด้วย expdp\
-รองรับหลาย Database และอัปโหลดไป Google Drive ผ่าน rclone\
-ทำงานอัตโนมัติด้วย cron
+คู่มือฉบับสมบูรณ์สำหรับ:
+
+1.  ติดตั้ง Ubuntu Server
+2.  ติดตั้ง Oracle Database 19c
+3.  ตั้งค่า OS Authentication
+4.  ตั้งค่า rclone เชื่อมต่อ Google Drive
+5.  สร้าง Backup Script (expdp)
+6.  ตั้งค่า Cron ให้ Backup อัตโนมัติ
 
 ------------------------------------------------------------------------
 
-## 1️⃣ Prerequisites
+# 1️⃣ ติดตั้ง Ubuntu Server
 
--   Oracle Database 19c ติดตั้งเรียบร้อย
--   User oracle ใช้งานได้
--   rclone config เรียบร้อย
--   Directory DATA_PUMP_DIR ชี้ไปที่ dpdump ของแต่ละ DB
+อัปเดตระบบ:
+
+    sudo apt update
+    sudo apt upgrade -y
+
+ติดตั้ง package ที่จำเป็น:
+
+    sudo apt install -y unzip wget curl net-tools vim
 
 ------------------------------------------------------------------------
 
-## 2️⃣ Enable OS Authentication
+# 2️⃣ สร้าง User oracle
 
-ทดสอบก่อน:
+    sudo groupadd oinstall
+    sudo groupadd dba
+    sudo useradd -m -g oinstall -G dba oracle
+    sudo passwd oracle
 
-    sqlplus / as sysdba
+------------------------------------------------------------------------
 
-ถ้าเข้าได้โดยไม่ถาม password = OK
+# 3️⃣ ติดตั้ง Oracle 19c
 
-ถ้าไม่ได้ ให้แก้ไฟล์:
+ติดตั้ง dependencies:
+
+    sudo apt install -y libaio1 libaio-dev
+
+สร้าง directory:
+
+    sudo mkdir -p /u01/app/oracle
+    sudo chown -R oracle:oinstall /u01
+    sudo chmod -R 775 /u01
+
+สลับเป็น user oracle:
+
+    su - oracle
+
+ตั้งค่า environment (.bash_profile):
+
+    export ORACLE_BASE=/u01/app/oracle
+    export ORACLE_HOME=/u01/app/oracle/product/19.0.0/dbhome_1
+    export ORACLE_SID=orcl
+    export PATH=$ORACLE_HOME/bin:$PATH
+
+ติดตั้ง Oracle ตามขั้นตอน installer ของ 19c
+
+------------------------------------------------------------------------
+
+# 4️⃣ เปิด OS Authentication
+
+แก้ไฟล์:
 
     $ORACLE_HOME/network/admin/sqlnet.ora
 
@@ -33,74 +72,105 @@ Script สำหรับ Backup Oracle Database แบบ Full Export ด้ว
 
     SQLNET.AUTHENTICATION_SERVICES = (BEQ)
 
-แล้ว restart database:
+Restart Database:
 
     sqlplus / as sysdba
     shutdown immediate;
     startup;
 
+ทดสอบ:
+
+    sqlplus / as sysdba
+
+ต้องไม่ถาม password
+
 ------------------------------------------------------------------------
 
-## 3️⃣ ทดสอบ expdp
+# 5️⃣ ติดตั้ง rclone
+
+    curl https://rclone.org/install.sh | sudo bash
+
+ตั้งค่า:
+
+    rclone config
+
+เลือก:
+
+    n) New remote
+    name: gdrive
+    storage: drive
+
+ทำตามขั้นตอน authorize ให้เสร็จ
+
+ทดสอบ:
+
+    rclone ls gdrive:
+
+------------------------------------------------------------------------
+
+# 6️⃣ ทดสอบ expdp
 
     unset TWO_TASK
     $ORACLE_HOME/bin/expdp "'/ as sysdba'" FULL=Y DIRECTORY=DATA_PUMP_DIR DUMPFILE=test.dmp LOGFILE=test.log
 
 ------------------------------------------------------------------------
 
-## 4️⃣ Backup Script
+# 7️⃣ สร้าง Backup Script
 
-ไฟล์: /home/oracle/backup_all_db.sh
+ไฟล์:
+
+    /home/oracle/backup_all_db.sh
+
+เนื้อหา:
 
     #!/bin/bash
-    
-    # ===== Oracle Environment =====
+
     export ORACLE_BASE=/u01/app/oracle
     export ORACLE_HOME=/u01/app/oracle/product/19.0.0/dbhome_1
     export PATH=$ORACLE_HOME/bin:$PATH
-    
+
+    unset TWO_TASK
+
     DATE=$(date +%Y%m%d)
-    
+
     DB_LIST=(
-    db1
-    db2
-    db3
+    orcl
     )
-    
+
     for DB in "${DB_LIST[@]}"
     do
         echo "===== Backup $DB ====="
 
-    export ORACLE_SID=$DB
-    DUMP_DIR=/u01/app/oracle/admin/$DB/dpdump
+        export ORACLE_SID=$DB
+        DUMP_DIR=/u01/app/oracle/admin/$DB/dpdump
 
-	$ORACLE_HOME/bin/expdp \'sys/password as sysdba\' \
-		FULL=Y \
-		DIRECTORY=DATA_PUMP_DIR \
-		DUMPFILE=${DB}_$DATE.dmp \
-		LOGFILE=${DB}_$DATE.log
+        $ORACLE_HOME/bin/expdp "'/ as sysdba'"             FULL=Y             DIRECTORY=DATA_PUMP_DIR             DUMPFILE=${DB}_$DATE.dmp             LOGFILE=${DB}_$DATE.log
 
-    # เช็คว่ามีไฟล์จริงก่อน upload
-    if [ -f "$DUMP_DIR/${DB}_$DATE.dmp" ]; then
-        rclone copy "$DUMP_DIR/${DB}_$DATE.dmp" gdrive:OracleBackup/$DB/
-    else
-        echo "Backup failed for $DB"
-    fi
+        if [ -f "$DUMP_DIR/${DB}_$DATE.dmp" ]; then
+            rclone copy "$DUMP_DIR/${DB}_$DATE.dmp" gdrive:OracleBackup/$DB/
+        else
+            echo "Backup failed for $DB"
+        fi
 
-    # ลบไฟล์เก่าเกิน 7 วัน
-    find "$DUMP_DIR" -name "*.dmp" -mtime +7 -delete
+        find "$DUMP_DIR" -name "*.dmp" -mtime +7 -delete
 
-done
+    done
 
-echo "===== Backup Completed ====="
+    echo "===== Backup Completed ====="
 
-ให้สิทธิ์ execute:
+ให้สิทธิ์:
 
     chmod +x /home/oracle/backup_all_db.sh
 
 ------------------------------------------------------------------------
 
-## 5️⃣ ตั้งค่า Cron
+# 8️⃣ ทดสอบรัน
+
+    /home/oracle/backup_all_db.sh
+
+------------------------------------------------------------------------
+
+# 9️⃣ ตั้งค่า Cron
 
     crontab -e
 
@@ -110,32 +180,25 @@ echo "===== Backup Completed ====="
 
 ------------------------------------------------------------------------
 
-## 6️⃣ ตรวจสอบ Log
+# 🔟 ตรวจสอบ Log
 
     cat /home/oracle/backup_cron.log
 
 ------------------------------------------------------------------------
 
-## Troubleshooting
+# ระบบ Backup ที่ได้
 
-### ถาม Password
-
--   ตรวจสอบ sqlplus / as sysdba
--   ตรวจสอบ SQLNET.AUTHENTICATION_SERVICES = (BEQ)
--   ใช้ unset TWO_TASK
-
-### LRM-00108
-
-เกิดจาก quoting ผิด\
-ต้องใช้:
-
-    expdp "'/ as sysdba'"
-
-------------------------------------------------------------------------
-
-## Result
-
--   Backup อัตโนมัติทุกวัน
+-   Backup Full Database ทุกวัน
 -   ไม่ถาม password
 -   ลบไฟล์เก่าเกิน 7 วัน
 -   Upload ขึ้น Google Drive อัตโนมัติ
+-   ทำงานผ่าน cron 100%
+
+------------------------------------------------------------------------
+
+# แนะนำ Production เพิ่มเติม
+
+-   ใช้ COMPRESSION=ALL
+-   ใช้ PARALLEL=4
+-   ตั้ง retention บน Google Drive
+-   ตั้ง alert mail เมื่อ backup fail
