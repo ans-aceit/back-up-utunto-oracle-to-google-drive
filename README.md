@@ -152,7 +152,7 @@ Restart Database:
 
 		# เช็คว่ามีไฟล์จริงก่อน upload
 		if [ -f "$DUMP_DIR/${DB}_$DATE.dmp" ]; then
-			rclone copy "$DUMP_DIR/${DB}_$DATE.dmp" gdrive:OracleBackup/$DB/
+			rclone copy "$DUMP_DIR/${DB}_$DATE.dmp" gdrive:OracleBackup/Database<DBIP>/$DB/
 		else
 			echo "Backup failed for $DB"
 		fi
