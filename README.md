@@ -90,11 +90,11 @@ Restart Database:
 
 ------------------------------------------------------------------------
 
-# 5️⃣ ติดตั้ง rclone
+# 5️⃣ ติดตั้ง rclone (root)
 
     curl https://rclone.org/install.sh | sudo bash
 
-ตั้งค่า:
+ตั้งค่า: (oracle)
 
     rclone config
 
